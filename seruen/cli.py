@@ -97,13 +97,24 @@ def advise(
     origin_label: str = "указанная точка",
     dataset_path: str | Path = retrieval.DEFAULT_DATASET,
     max_picks: int = 3,
+    language: str | None = None,
+    overrides: dict | None = None,
 ) -> Advice:
-    """intent -> weather -> retrieval -> generation -> route."""
+    """intent -> weather -> retrieval -> generation -> route.
+
+    `language` forces the answer language (the UI switch); `overrides` lets the
+    UI set intent fields the user ticked by hand, e.g. {"with_child": True}.
+    """
     when = when or datetime.now()
     if demo is None:
         demo = os.environ.get("SERUEN_DEMO", "0") == "1" or not os.environ.get("GOOGLE_API_KEY")
 
     intent = parse_intent(query, budget_min=budget_min, use_llm=not demo)
+    if language in {"ru", "kk", "en"}:
+        intent.language = language
+    for field_name, value in (overrides or {}).items():
+        if hasattr(intent, field_name) and value not in (None, False, 0, ""):
+            setattr(intent, field_name, value)
     current_weather = weather_mod.get_weather(lat, lon) if use_weather else None
 
     result = retrieval.retrieve(
