@@ -21,6 +21,16 @@ $ python -m seruen.cli --preset mega --query "Я у Mega Silk Way, хочу по
    Не проверено: часы работы не подтверждены, доступность на коляске не размечена
 ```
 
+## Материалы для сдачи
+
+| Что | Где |
+|---|---|
+| Репозиторий | https://github.com/044shad1k/seruen-ai |
+| Презентация (5–7 мин) | https://claude.ai/artifact/Am8o9KANyGWjx59ZhcqPaw (экспорт в PDF/PPTX) |
+| Тестовые сценарии и ограничения | [docs/TEST_SCENARIOS.md](docs/TEST_SCENARIOS.md), раздел «Ограничения» ниже |
+| Этика и приватность | [docs/PRIVACY.md](docs/PRIVACY.md) |
+| Демо-видео | YouTube: _ссылка будет добавлена_ |
+
 ## Быстрый старт
 
 ```bash
