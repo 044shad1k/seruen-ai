@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
@@ -162,15 +163,33 @@ class Answer:
         }
 
 
-def _first_sentence(text: str, limit: int = 160) -> str:
-    text = (text or "").strip()
+# a period after one of these is an abbreviation, not the end of a sentence —
+# Wikipedia leads are full of them: «Байтерек» (каз. Бәйтерек, англ. Baiterek)
+ABBREVIATIONS = {
+    "каз", "англ", "рус", "лат", "нем", "фр", "тюрк", "см", "им", "ул", "пр", "просп",
+    "г", "гг", "т", "д", "др", "обл", "р", "ок", "св", "гл", "etc", "lit", "eng",
+}
+
+
+def _first_sentence(text: str, limit: int = 200) -> str:
+    """Lead sentence of a description, without cutting on an abbreviation."""
+    text = re.sub(r"\s+", " ", (text or "").strip())
     if not text:
         return ""
-    for separator in (". ", "! ", "? "):
-        if separator in text:
-            text = text.split(separator)[0] + "."
+
+    pieces = re.split(r"(?<=[.!?])\s+", text)
+    sentence = ""
+    for index, piece in enumerate(pieces):
+        sentence = f"{sentence} {piece}".strip()
+        words = re.findall(r"[^\W\d_]+", sentence)
+        if words and words[-1].lower() in ABBREVIATIONS:
+            continue
+        if len(sentence) >= 40 or index == len(pieces) - 1:
             break
-    return text[:limit]
+
+    if len(sentence) > limit:
+        return sentence[:limit].rsplit(" ", 1)[0] + "…"
+    return sentence
 
 
 def _visit_minutes(candidate: Candidate, budget_min: int) -> int:
