@@ -68,11 +68,16 @@ TAG_GROUPS: dict[str, list[str]] = {
     "shop": ["mall"],
 }
 
+# Children's playgrounds are the one category OSM almost never names: filtering
+# on `name` leaves a single playground in all of Astana. They are collected
+# without that filter and labelled by street in normalize.py.
+UNNAMED_GROUPS: dict[str, list[str]] = {"leisure": ["playground"]}
+
 USER_AGENT = "SeruenAI/0.1 (hackathon POI collector; contact: local use only)"
 
 
 def build_query(timeout: int = 180) -> str:
-    """Overpass QL for every named POI of interest inside the Astana bbox."""
+    """Overpass QL for every POI of interest inside the Astana bbox."""
     s, w, n, e = BBOX
     bbox = f"({s},{w},{n},{e})"
     parts = []
@@ -80,6 +85,9 @@ def build_query(timeout: int = 180) -> str:
         # the regex form also covers single-value groups, so there is no branch here
         selector = f'["{key}"~"^({"|".join(values)})$"]'
         parts.append(f'  nwr["name"]{selector}{bbox};')
+    for key, values in UNNAMED_GROUPS.items():
+        selector = f'["{key}"~"^({"|".join(values)})$"]'
+        parts.append(f'  nwr{selector}{bbox};')
     body = "\n".join(parts)
     # `out center tags` gives a single representative point for ways/relations
     return f"[out:json][timeout:{timeout}];\n(\n{body}\n);\nout center tags;\n"

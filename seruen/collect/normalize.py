@@ -329,18 +329,42 @@ def _phone(tags: dict) -> str | None:
     return None
 
 
+# categories where a missing name is normal and we may label the object
+# ourselves (always flagged with name_generated = true)
+NAMEABLE_WITHOUT_NAME = {"playground"}
+
+GENERATED_NAMES = {
+    "playground": {"ru": "Детская площадка", "kk": "Балалар алаңы", "en": "Playground"},
+}
+
+
+def _generated_name(category: str, tags: dict) -> dict | None:
+    """Label an unnamed object by its street, e.g. 'Детская площадка (ул. Кунаева)'."""
+    base = GENERATED_NAMES.get(category)
+    if base is None:
+        return None
+    street = (tags.get("addr:street") or "").strip()
+    suffix = f" ({street})" if street else ""
+    return {language: text + suffix for language, text in base.items()}
+
+
 def normalize_element(element: dict) -> dict | None:
     """One Overpass element -> one POI record, or None if unusable."""
     tags = element.get("tags") or {}
     name = (tags.get("name") or "").strip()
-    if not name:
-        return None
     position = _coords(element)
     if position is None:
         return None
     lat, lon = position
 
     category, subtype = _pick_category(tags)
+    generated_name = None
+    if not name:
+        if category not in NAMEABLE_WITHOUT_NAME:
+            return None
+        generated_name = _generated_name(category, tags)
+        if generated_name is None:
+            return None
     keywords = _build_tags(tags, subtype)
     osm_id = f"{element['type']}/{element['id']}"
     osm_url = f"https://www.openstreetmap.org/{element['type']}/{element['id']}"
@@ -351,13 +375,16 @@ def normalize_element(element: dict) -> dict | None:
     if tags.get("wheelchair"):
         evidence.append({"field": "wheelchair", "source_url": osm_url})
 
+    names = generated_name or {
+        "ru": tags.get("name:ru") or name,
+        "kk": tags.get("name:kk") or name,
+        "en": tags.get("name:en") or name,
+    }
+
     return {
         "id": osm_id,
-        "name": {
-            "ru": tags.get("name:ru") or name,
-            "kk": tags.get("name:kk") or name,
-            "en": tags.get("name:en") or name,
-        },
+        "name": names,
+        "name_generated": generated_name is not None,
         "lat": round(lat, 6),
         "lon": round(lon, 6),
         "category": category,
@@ -436,15 +463,13 @@ def main(argv: list[str] | None = None) -> int:
     dropped_unnamed = 0
     dropped_no_coords = 0
     for element in elements:
-        tags = element.get("tags") or {}
-        if not (tags.get("name") or "").strip():
-            dropped_unnamed += 1
-            continue
         if _coords(element) is None:
             dropped_no_coords += 1
             continue
         record = normalize_element(element)
         if record is None:
+            # unnamed and not a category we are allowed to label ourselves
+            dropped_unnamed += 1
             continue
         record["source"]["fetched_at"] = fetched_at
         pois.append(record)
@@ -471,6 +496,7 @@ def main(argv: list[str] | None = None) -> int:
         "wheelchair_known": sum(1 for p in pois if p["wheelchair"] != "unknown"),
         "wheelchair_yes": sum(1 for p in pois if p["wheelchair"] == "yes"),
         "name_ru_localized": sum(1 for p in pois if p["name"]["ru"] != p["name"]["en"]),
+        "name_generated": sum(1 for p in pois if p.get("name_generated")),
         "indoor_known": sum(1 for p in pois if p["indoor"] is not None),
         "by_category": dict(by_category.most_common()),
         "license": "ODbL 1.0 — © OpenStreetMap contributors",

@@ -79,6 +79,8 @@ class Candidate:
     def uncertainties(self) -> list[str]:
         """Things we honestly do not know about this POI."""
         items: list[str] = []
+        if self.poi.get("name_generated"):
+            items.append("название дано нами: в OSM объект без имени")
         if self.hours.status == UNKNOWN:
             items.append("часы работы не подтверждены")
         if self.poi.get("wheelchair", "unknown") == "unknown":
@@ -342,14 +344,21 @@ def retrieve(
 
 
 def diversify(candidates: list[Candidate], limit: int = 3, max_per_category: int = 2) -> list[Candidate]:
-    """Pick up to `limit` candidates without repeating a category too often."""
+    """Pick up to `limit` candidates without repeating a category or a name.
+
+    The name check matters for objects we labelled ourselves: two cards both
+    reading "Детская площадка" are useless to the user.
+    """
     chosen: list[Candidate] = []
     used: dict[str, int] = {}
+    seen_names: set[str] = set()
     for candidate in candidates:
         category = candidate.poi["category"]
-        if used.get(category, 0) >= max_per_category:
+        name = candidate.name().casefold()
+        if used.get(category, 0) >= max_per_category or name in seen_names:
             continue
         chosen.append(candidate)
+        seen_names.add(name)
         used[category] = used.get(category, 0) + 1
         if len(chosen) >= limit:
             break
