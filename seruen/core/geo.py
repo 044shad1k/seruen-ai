@@ -15,6 +15,10 @@ BUFFER_MIN = 5
 MIN_RADIUS_M = 300
 MAX_RADIUS_M = 6000
 
+# Walking must not eat the whole budget: a place 104 minutes away technically
+# "fits" into two hours, but there is then no time to actually be there.
+MAX_WALK_SHARE = 0.45
+
 # how long a visit to each category typically takes, minutes
 TYPICAL_VISIT_MIN = {
     "park": 25,
@@ -94,8 +98,10 @@ def fits_in_budget(
 ) -> bool:
     """Can the user walk there, spend `visit_min`, and stay inside the budget?"""
     legs = 2 if return_to_start else 1
-    total = walking_minutes(distance_m) * legs + visit_min
-    return total <= budget_min + slack_min
+    walk_total = walking_minutes(distance_m) * legs
+    if walk_total > budget_min * MAX_WALK_SHARE:
+        return False
+    return walk_total + visit_min <= budget_min + slack_min
 
 
 def round_coords(lat: float, lon: float, digits: int = 3) -> tuple[float, float]:

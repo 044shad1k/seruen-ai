@@ -66,6 +66,14 @@ def test_fits_in_budget():
     assert not geo.fits_in_budget(1500, 30, 45, return_to_start=True)
 
 
+def test_walking_cannot_eat_most_of_the_budget():
+    # 5.6 km is ~104 min on foot: it technically leaves 16 min of a 120 min
+    # budget, but nobody wants a recommendation like that
+    assert not geo.fits_in_budget(5600, 10, 120)
+    # under the cap the same budget is fine
+    assert geo.fits_in_budget(2500, 10, 120)
+
+
 def test_typical_visit_picks_shortest_wanted_category():
     assert geo.typical_visit_minutes(["theatre", "landmark"]) == geo.TYPICAL_VISIT_MIN["landmark"]
     assert geo.typical_visit_minutes([]) == geo.DEFAULT_VISIT_MIN
