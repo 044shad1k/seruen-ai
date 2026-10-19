@@ -32,6 +32,10 @@ HOLIDAY_SELECTORS = {"ph", "sh", "ph off", "sh off"}
 
 _TIME_RANGE_RE = re.compile(r"^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$")
 _DAY_PART_RE = re.compile(r"^[A-Za-z]{2}(\s*-\s*[A-Za-z]{2})?$")
+# OSM also uses "," between whole rules: "Mo-Th 11:00-23:00, Fr,Sa 12:00-24:00".
+# A comma right after a time (digit) and before a day name starts a new rule;
+# a comma between two day names ("Fr,Sa") belongs to a day list.
+_RULE_SEPARATOR_RE = re.compile(r"(?<=\d)\s*,\s*(?=(?:Mo|Tu|We|Th|Fr|Sa|Su|PH|SH)\b)", re.IGNORECASE)
 
 STATUS_LABEL_RU = {
     OPEN: "открыто",
@@ -65,10 +69,17 @@ class HoursResult:
 
 
 def _parse_days(part: str) -> list[int] | None:
-    """`Mo-Fr` / `Mo,We` / `Sa` -> weekday indices (Mo=0). None if unparsable."""
+    """`Mo-Fr` / `Mo,We` / `Sa,Su,PH` -> weekday indices (Mo=0).
+
+    Holiday selectors (PH/SH) are dropped from the list: we do not model
+    holidays, but their presence must not make the whole rule unreadable.
+    Returns None if unparsable, [] if the rule only covers holidays.
+    """
     result: list[int] = []
     for chunk in part.split(","):
         chunk = chunk.strip()
+        if chunk.lower() in {"ph", "sh"}:
+            continue
         if not chunk or not _DAY_PART_RE.match(chunk):
             return None
         if "-" in chunk:
@@ -103,7 +114,8 @@ def _parse_time_ranges(part: str) -> list[tuple[int, int]] | None:
 
 def _split_rule(rule: str) -> tuple[list[int], list[tuple[int, int]] | str] | None:
     """One `;`-separated rule -> (weekdays, time ranges) or (weekdays, "off")."""
-    rule = rule.strip()
+    # "Su, Tu-Fr 11:00-19:00" — a space after a day-list comma is still one list
+    rule = re.sub(r",\s+", ",", rule.strip())
     if not rule:
         return None
     lowered = rule.lower()
@@ -145,6 +157,7 @@ def hours_status(raw: str | None, when: datetime) -> HoursResult:
         )
 
     raw_text = str(raw).strip()
+    rules_text = _RULE_SEPARATOR_RE.sub("; ", raw_text)
     weekday = when.weekday()  # Mo = 0
     minute_of_day = when.hour * 60 + when.minute
 
@@ -152,7 +165,7 @@ def hours_status(raw: str | None, when: datetime) -> HoursResult:
     explicit_off_today = False
     saw_any_rule = False
 
-    for rule in raw_text.split(";"):
+    for rule in rules_text.split(";"):
         rule = rule.strip()
         if not rule:
             continue
@@ -188,7 +201,7 @@ def hours_status(raw: str | None, when: datetime) -> HoursResult:
     # midnight-crossing ranges from yesterday can still be running now
     yesterday = (weekday - 1) % 7
     carry_over: list[tuple[int, int]] = []
-    for rule in raw_text.split(";"):
+    for rule in rules_text.split(";"):
         parsed = _split_rule(rule)
         if parsed is None:
             continue

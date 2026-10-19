@@ -30,7 +30,7 @@ CONFIDENCE_LEVELS = {"low", "medium", "high"}
 ACTIVITY_RU = {
     "park": "Пройдите по главной аллее до дальнего конца и обратно, сделайте остановку у воды или на лавочке.",
     "cafe": "Возьмите кофе с собой или займите место у окна и разберите почту за 20 минут.",
-    "restaurant": "Загляните на один горячий блюдо из местной кухни — на полный обед времени может не хватить.",
+    "restaurant": "Возьмите одно горячее блюдо из местной кухни — на полный обед времени может не хватить.",
     "museum": "Пройдите один зал целиком, а не всю экспозицию — так останется время на дорогу.",
     "landmark": "Подойдите вплотную, обойдите вокруг и снимите пару кадров с двух разных сторон.",
     "viewpoint": "Поднимитесь наверх, найдите точку с видом на левый берег и задержитесь на 10 минут.",
@@ -73,6 +73,33 @@ ACTIVITY_KK = {
 }
 
 ACTIVITY_BY_LANG = {"ru": ACTIVITY_RU, "en": ACTIVITY_EN, "kk": ACTIVITY_KK}
+
+# a bar and a canteen are both `restaurant` in our taxonomy — the OSM subtype
+# tag is what tells them apart, and the advice differs a lot
+ACTIVITY_BY_TAG = {
+    "ru": {
+        "бар": "Возьмите один коктейль или бокал и займите место у стойки — заведение работает поздно.",
+        "паб": "Возьмите один напиток и посмотрите, что идёт на экранах — обычно открыто до ночи.",
+        "бильярд": "Возьмите стол на час и сыграйте пару партий.",
+        "боулинг": "Возьмите дорожку на час — этого хватит на две игры.",
+        "катание на коньках": "Возьмите коньки в прокат и выйдите на один сеанс.",
+        "смотровая площадка": "Поднимитесь наверх и найдите точку с видом на Ишим.",
+        "мороженое": "Возьмите рожок и съешьте его по пути к следующей точке.",
+    },
+    "en": {
+        "бар": "Have one drink at the bar — this place stays open late.",
+        "паб": "Grab a drink and check what is on the screens.",
+        "бильярд": "Take a table for an hour and play a couple of rounds.",
+        "боулинг": "Book a lane for an hour — enough for two games.",
+        "катание на коньках": "Rent skates and do one session.",
+        "мороженое": "Get a cone and eat it on the way to the next stop.",
+    },
+    "kk": {
+        "бар": "Бір сусын алып, бар жанынан орын алыңыз — кешке дейін жұмыс істейді.",
+        "бильярд": "Бір сағатқа үстел алып, екі партия ойнаңыз.",
+        "катание на коньках": "Коньки жалға алып, бір сеансқа шығыңыз.",
+    },
+}
 
 HOURS_PHRASE = {
     "ru": {OPEN: "сейчас открыто по данным OSM", UNKNOWN: "часы работы не подтверждены"},
@@ -171,11 +198,18 @@ def _pick_from_candidate(candidate: Candidate, intent: Intent, why: str | None =
     if candidate.hours.status == UNKNOWN:
         confidence = "low" if candidate.poi["category"] in {"cafe", "restaurant"} else "medium"
 
+    activity = activities.get(candidate.poi["category"], activities["other"])
+    for tag in candidate.poi.get("tags") or []:
+        specific = ACTIVITY_BY_TAG.get(language, {}).get(tag.casefold())
+        if specific:
+            activity = specific
+            break
+
     return Pick(
         poi_id=candidate.poi["id"],
         name=candidate.name(language),
         why=text.strip(),
-        activity=activities.get(candidate.poi["category"], activities["other"]),
+        activity=activity,
         visit_minutes=_visit_minutes(candidate, intent.time_budget_min),
         confidence=confidence,
         source=SOURCE_POI,
